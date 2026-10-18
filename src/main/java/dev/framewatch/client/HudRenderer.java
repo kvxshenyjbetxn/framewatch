@@ -46,10 +46,13 @@ public final class HudRenderer {
     private static boolean[] graphClipped;
     private static int graphShown;
     private static double axisMs, cachedBudget = Double.NaN;
-    private static String axisLabel, budgetLabel, durationLabel;
+    private static String axisLabel, frameHeader, durationLabel;
+    private static int frameColor;
     private static int durationWidth;
     private static long nextGraph;
     private static boolean textReady;
+    private static final MetricGraph fpsGraph = new MetricGraph();
+    private static final MetricGraph memoryGraph = new MetricGraph();
 
     private HudRenderer() {}
 
@@ -77,7 +80,8 @@ public final class HudRenderer {
      * scopes, normalized by tick + render + present + other, never GPU/frame time.
      */
     public static void render(Minecraft mc, FrameSnapshot stats, SystemSnapshot system,
-            FrameConfig config, double budgetMs, long[] bucketPeaks, int[] bucketEvents, int bucketCount) {
+            FrameConfig config, double budgetMs, long[] bucketPeaks, int[] bucketEvents, int bucketCount,
+            double[] intervalTotals, int[] frameCounts, double[] heapMiB) {
         if (mc == null || config == null || !config.hudEnabled || !shouldRenderOnScreen(mc.currentScreen)
                 || mc.fontRenderer == null
                 || mc.displayWidth <= 0 || mc.displayHeight <= 0
@@ -117,8 +121,10 @@ public final class HudRenderer {
             cacheText(mc.fontRenderer, stats, system, config, budgetMs, bucketPeaks, bucketCount, language);
             nextGraph = 0;
         }
-        if (config.showGraph && now >= nextGraph) {
-            cacheGraph(bucketPeaks, bucketEvents, bucketCount);
+        if (config.hasGraphs() && now >= nextGraph) {
+            if (config.showGraph) cacheGraph(bucketPeaks, bucketEvents, bucketCount);
+            if (config.showFpsGraph) fpsGraph.cache(intervalTotals, frameCounts, false, system);
+            if (config.showMemoryGraph) memoryGraph.cache(heapMiB, null, true, system);
             nextGraph = now + Math.max(0, config.graphRefreshMillis) * 1_000_000L;
         }
 
@@ -241,9 +247,19 @@ public final class HudRenderer {
 
         double currentFps = recentCount > 0 && recentTotal > 0 ? recentCount * 1_000_000_000.0 / recentTotal : Double.NaN;
         row(font, layout.titleRow, hud("title"), "", WHITE);
-        row(font, layout.fpsRow, hud("fps"), number(currentFps, 0),
-                metricColor(recentCount > 0 ? recentTotal / recentCount / 1_000_000.0 : Double.NaN, recentLong));
-        row(font, layout.frameRow, hud("frame"), number(latestMs, 2) + " " + msUnit, metricColor(latestMs, latestLong));
+        String fpsValue = number(currentFps, 0);
+        int fpsColor = metricColor(recentCount > 0 ? recentTotal / recentCount / 1_000_000.0 : Double.NaN, recentLong);
+        row(font, layout.fpsRow, hud("fps"), fpsValue, fpsColor);
+        fpsGraph.header = hud("fps") + fpsValue;
+        fpsGraph.headerColor = fpsColor;
+        String heapValue = memory(system == null ? -1 : system.heapUsedBytes)
+                + " / " + memory(system == null ? -1 : system.heapMaxBytes) + " " + memoryUnit;
+        memoryGraph.header = hud("heap") + heapValue;
+        memoryGraph.headerColor = GREEN;
+        String frameValue = number(latestMs, 2) + " " + msUnit;
+        frameColor = metricColor(latestMs, latestLong);
+        frameHeader = hud("frame") + frameValue;
+        row(font, layout.frameRow, hud("frame"), frameValue, frameColor);
         if (layout.statisticsRow >= 0) {
             row(font, layout.statisticsRow, hud("avg"), number(sampled ? stats.fps : Double.NaN, 1)
                     + "  " + hud("max") + number(minInterval > 0 ? 1_000_000_000.0 / minInterval : Double.NaN, 1),
@@ -255,8 +271,7 @@ public final class HudRenderer {
                     metricColor(sampled ? stats.p99Ms : Double.NaN, windowLong));
         }
         if (layout.memoryRow >= 0) {
-            row(font, layout.memoryRow, hud("heap"), memory(system == null ? -1 : system.heapUsedBytes)
-                    + " / " + memory(system == null ? -1 : system.heapMaxBytes) + " " + memoryUnit, GREEN);
+            row(font, layout.memoryRow, hud("heap"), heapValue, GREEN);
         }
         if (layout.directMemoryRow >= 0) {
             row(font, layout.directMemoryRow, hud("direct"), memory(system == null ? -1 : system.directUsedBytes)
@@ -296,10 +311,9 @@ public final class HudRenderer {
             axisMs *= 1.1;
         }
         // Auto-axis text changes only at text/stat refresh; new peaks still get clipping markers.
-        axisLabel = number(axisMs, 1) + " " + msUnit;
-        budgetLabel = hud("budget") + number(positiveFinite(budgetMs) ? budgetMs : Double.NaN, 1) + " " + msUnit;
         durationLabel = Integer.toString(cfg.graphWindowSeconds) + " " + secondsUnit;
         durationWidth = font.getStringWidth(durationLabel);
+        axisLabel = scaleLabel(axisMs, 1, msUnit);
     }
 
     private static String hud(String key) {
@@ -375,7 +389,11 @@ public final class HudRenderer {
                 rect(tessellator, 0, 0, profiler ? HudLayout.PROFILER_WIDTH : layout.contentWidth,
                         profiler ? layout.rightLogicalHeight : layout.leftLogicalHeight, alpha << 24 | 0x101216);
                 if (profiler) profilerRects(tessellator);
-                else if (cfg.showGraph) graphRects(tessellator, cfg.showGraphEvents);
+                else {
+                    if (cfg.showGraph) graphRects(tessellator, cfg.showGraphEvents);
+                    if (cfg.showFpsGraph) fpsGraph.draw(tessellator, layout.fpsGraphTop);
+                    if (cfg.showMemoryGraph) memoryGraph.draw(tessellator, layout.memoryGraphTop);
+                }
             } finally {
                 // Exactly one untextured rectangle batch per visible panel, also on failure.
                 tessellator.draw();
@@ -404,9 +422,11 @@ public final class HudRenderer {
             text(font, labels[i], x, y, WHITE, cfg.textShadow);
             text(font, values[i], x + valueOffsets[i], y, textColors[i], cfg.textShadow);
         }
+        if (cfg.showFpsGraph) fpsGraph.text(font, layout.fpsGraphTop, cfg.textShadow);
+        if (cfg.showMemoryGraph) memoryGraph.text(font, layout.memoryGraphTop, cfg.textShadow);
         if (!cfg.showGraph) return;
-        text(font, axisLabel, x, layout.graphTop - HudLayout.ROW_HEIGHT, WHITE, cfg.textShadow);
-        text(font, budgetLabel, x, layout.graphFooter, WHITE, cfg.textShadow);
+        text(font, frameHeader, x, layout.graphTop - HudLayout.ROW_HEIGHT, frameColor, cfg.textShadow);
+        text(font, axisLabel, x, layout.graphFooter, WHITE, cfg.textShadow);
         text(font, durationLabel, layout.contentWidth - HudLayout.PADDING - durationWidth,
                 layout.graphFooter, WHITE, cfg.textShadow);
         if (layout.graphEventsRow >= 0) text(font, eventLegend, x, layout.graphEventsRow, WHITE, cfg.textShadow);
@@ -472,6 +492,75 @@ public final class HudRenderer {
                 marker(t, x, top, height, 4, flags, FrameSnapshot.EVENT_SHADER_CHANGE, 0xffff55ff);
                 marker(t, x, top, height, 6, flags, FrameSnapshot.EVENT_LONG_FRAME, 0xffff5555);
             }
+        }
+    }
+
+    private static String scaleLabel(double maximum, int decimals, String unit) {
+        return cachedFont.trimStringToWidth(hud("scale") + " " + number(maximum, decimals) + " " + unit,
+                Math.max(1, layout.contentWidth - 2 * HudLayout.PADDING - durationWidth - 6));
+    }
+
+    /** Reusable geometry for FPS averages and sampled JVM heap; no per-frame allocation. */
+    private static final class MetricGraph {
+        private int[] heights = new int[0], colors = new int[0];
+        private String label, header;
+        private int headerColor = WHITE;
+        private double axis;
+        private boolean memory;
+
+        void cache(double[] samples, int[] counts, boolean heap, SystemSnapshot system) {
+            memory = heap;
+            int width = layout.contentWidth - HudLayout.PADDING * 2;
+            if (heights.length != width) {
+                heights = new int[width];
+                colors = new int[width];
+            }
+            axis = heap && system != null && system.heapMaxBytes > 0
+                    ? system.heapMaxBytes / 1048576.0 : heap ? 1 : Math.max(60, 1000 / cachedBudget);
+            for (int i = 0; samples != null && i < Math.min(width, samples.length); i++) {
+                double value = value(samples, counts, i);
+                if (finiteNonnegative(value)) axis = Math.max(axis, value * 1.1);
+            }
+            label = scaleLabel(axis, heap ? 1 : 0,
+                    heap ? memoryUnit : HudTranslations.text("framewatch.unit.fps"));
+            for (int i = 0; i < width; i++) {
+                double value = samples != null && i < samples.length ? value(samples, counts, i) : -1;
+                heights[i] = !finiteNonnegative(value) ? 0 : Math.max(1,
+                        Math.min(layout.graphHeight, (int) Math.ceil(value / axis * layout.graphHeight)));
+                colors[i] = heap ? 0x55ffff : metricColor(value > 0 ? 1000 / value : Double.NaN, false);
+            }
+        }
+
+        private double value(double[] samples, int[] counts, int i) {
+            return memory ? samples[i] : counts != null && i < counts.length && counts[i] > 0 && samples[i] > 0
+                    ? counts[i] * 1_000_000_000.0 / samples[i] : -1;
+        }
+
+        void draw(Tessellator t, int top) {
+            int bottom = top + layout.graphHeight;
+            for (int i = 0; i < heights.length; i++) {
+                if (heights[i] == 0) continue;
+                int x = HudLayout.PADDING + i, y = bottom - heights[i];
+                rect(t, x, y, x + 1, bottom, 0x50000000 | colors[i]);
+                rect(t, x, y, x + 1, y + 1, 0xff000000 | colors[i]);
+                if (i > 0 && heights[i - 1] > 0) {
+                    int previous = bottom - heights[i - 1];
+                    rect(t, x, Math.min(y, previous), x + 0.6, Math.max(y, previous) + 1, 0xff000000 | colors[i]);
+                }
+            }
+            double target = memory ? Double.NaN : 1000 / cachedBudget;
+            if (positiveFinite(target) && target <= axis) {
+                double y = Math.max(top, Math.min(bottom - 1, bottom - target / axis * layout.graphHeight));
+                rect(t, HudLayout.PADDING, y, HudLayout.PADDING + heights.length, y + 1, 0x90ffffff);
+            }
+        }
+
+        void text(FontRenderer font, int top, boolean shadow) {
+            HudRenderer.text(font, header, HudLayout.PADDING, top - HudLayout.ROW_HEIGHT, headerColor, shadow);
+            // Keep the scale separate from the current value; reserve room for duration.
+            HudRenderer.text(font, label, HudLayout.PADDING, top + layout.graphHeight + 2, WHITE, shadow);
+            HudRenderer.text(font, durationLabel, layout.contentWidth - HudLayout.PADDING - durationWidth,
+                    top + layout.graphHeight + 2, WHITE, shadow);
         }
     }
 

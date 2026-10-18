@@ -188,6 +188,21 @@ public final class FrameHistory {
      */
     public synchronized int copyTimeBuckets(long nowNanos, long windowNanos,
             long[] peaks, int[] flags) {
+        return copyTimeBuckets(nowNanos, windowNanos, peaks, flags, null, null);
+    }
+
+    /** Optional reusable sums/counts produce FPS as count * 1e9 / summed intervals. */
+    public synchronized int copyTimeBuckets(long nowNanos, long windowNanos,
+            long[] peaks, int[] flags, double[] intervalTotals, int[] frameCounts) {
+        if ((intervalTotals == null) != (frameCounts == null)) throw new IllegalArgumentException("Both FPS buffers required");
+        if (intervalTotals != null) {
+            if (intervalTotals.length < Math.min(peaks.length, flags.length)
+                    || frameCounts.length < Math.min(peaks.length, flags.length)) {
+                throw new IllegalArgumentException("FPS buffers too small");
+            }
+            Arrays.fill(intervalTotals, 0);
+            Arrays.fill(frameCounts, 0);
+        }
         if (peaks == null) {
             throw new NullPointerException("peaks");
         }
@@ -231,6 +246,10 @@ public final class FrameHistory {
             int bucket = timeBucket(offset, windowNanos, width);
             peaks[bucket] = Math.max(peaks[bucket], intervalsNanos[frame]);
             flags[bucket] |= events[frame];
+            if (intervalTotals != null) {
+                intervalTotals[bucket] += intervalsNanos[frame];
+                frameCounts[bucket]++;
+            }
             frame = advance(frame);
         }
         return width;

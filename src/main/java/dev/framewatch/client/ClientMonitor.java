@@ -34,6 +34,9 @@ public final class ClientMonitor {
     private final AngelicaBridge bridge = new AngelicaBridge();
     private long[] graphIntervals = new long[config.graphWidth];
     private int[] graphEvents = new int[config.graphWidth];
+    private double[] graphTotals = new double[config.graphWidth], graphMemory = new double[config.graphWidth];
+    private int[] graphFrameCounts = new int[config.graphWidth];
+    private final dev.framewatch.telemetry.MemoryHistory memoryHistory = new dev.framewatch.telemetry.MemoryHistory();
     private int graphCount;
     private long nextGraph, seenConfigRevision = -1;
         private int seenGraphWindow, seenGraphRefresh, seenTextRefresh, seenStatsWindow, seenTargetFps;
@@ -79,6 +82,8 @@ public final class ClientMonitor {
         if (lastWorld != mc.theWorld) {
             lastWorld = mc.theWorld;
             history.clear();
+            memoryHistory.clear();
+            nextSystem = nextGraph = 0;
             stats = history.snapshot(now, 0);
             invalidateBoundary(now);
         }
@@ -167,11 +172,14 @@ public final class ClientMonitor {
             if (graphIntervals.length != config.graphWidth) {
                 graphIntervals = new long[config.graphWidth];
                 graphEvents = new int[config.graphWidth];
+                graphTotals = new double[config.graphWidth];
+                graphMemory = new double[config.graphWidth];
+                graphFrameCounts = new int[config.graphWidth];
                 graphCount = 0;
                 nextGraph = 0;
             }
             if (seenGraphWindow != config.graphWindowSeconds || seenGraphRefresh != config.graphRefreshMillis
-                    || (config.showGraph && !seenShowGraph)) nextGraph = 0;
+                    || (config.hasGraphs() && !seenShowGraph)) nextGraph = 0;
             if (seenTextRefresh != config.textRefreshMillis || seenStatsWindow != config.windowSeconds) nextStats = 0;
             if (seenTargetFps != config.targetFps) nextSystem = 0;
             seenGraphWindow = config.graphWindowSeconds;
@@ -179,7 +187,7 @@ public final class ClientMonitor {
             seenTextRefresh = config.textRefreshMillis;
             seenStatsWindow = config.windowSeconds;
             seenTargetFps = config.targetFps;
-            seenShowGraph = config.showGraph;
+            seenShowGraph = config.hasGraphs();
         }
         if (now >= nextSystem) sampleSystem(now);
         if (!config.hudEnabled || mc.theWorld == null || !Display.isVisible()
@@ -189,12 +197,15 @@ public final class ClientMonitor {
             stats = history.snapshot(now, config.windowSeconds * SECOND);
             nextStats = now + config.textRefreshMillis * 1_000_000L;
         }
-        if (config.showGraph && now >= nextGraph) {
-            graphCount = history.copyTimeBuckets(now, config.graphWindowSeconds * SECOND, graphIntervals, graphEvents);
+        if (config.hasGraphs() && now >= nextGraph) {
+            graphCount = history.copyTimeBuckets(now, config.graphWindowSeconds * SECOND, graphIntervals, graphEvents,
+                    graphTotals, graphFrameCounts);
+            memoryHistory.copyTimeBuckets(now, config.graphWindowSeconds * SECOND, graphMemory);
             nextGraph = now + config.graphRefreshMillis * 1_000_000L;
             HudRenderer.invalidateGraph();
         }
-        HudRenderer.render(mc, stats, system, config, budgetMs, graphIntervals, graphEvents, graphCount);
+        HudRenderer.render(mc, stats, system, config, budgetMs, graphIntervals, graphEvents, graphCount,
+                graphTotals, graphFrameCounts, graphMemory);
     }
 
     private void sampleSystem(long now) {
@@ -213,6 +224,7 @@ public final class ClientMonitor {
             boolean capped = cap > 0 && cap < 260;
             target = refresh > 0 ? (capped ? Math.min(refresh, cap) : refresh) : (capped ? cap : 60);
         }
+        memoryHistory.record(now, system.heapUsedBytes);
         budgetMs = 1000.0 / Math.max(1, target);
         nextSystem = now + SECOND;
     }
@@ -236,6 +248,8 @@ public final class ClientMonitor {
 
     public void reset() {
         history.clear();
+        memoryHistory.clear();
+        nextSystem = nextGraph = 0;
         pendingEvents = 0;
         invalidateBoundary(System.nanoTime());
         stats = history.snapshot(0, 0);

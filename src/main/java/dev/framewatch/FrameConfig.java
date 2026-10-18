@@ -25,6 +25,7 @@ public final class FrameConfig {
     public String language = "auto";
     public boolean showHardware = false, showEnvironment = false, showProfiler = true;
     public boolean showGraph = true, showGraphEvents = true, textShadow = false;
+    public boolean showFpsGraph = false, showMemoryGraph = false;
     public double hudScale = 0.8, panelOpacity = 0.65, graphMaxMs = 100;
     public int graphWindowSeconds = 10, textRefreshMillis = 250, graphRefreshMillis = 33;
     public int profilerX = 6, profilerY = 6;
@@ -87,6 +88,8 @@ public final class FrameConfig {
         showProfiler = c.get("hud", "showProfiler", legacyProfiler ? detailed : showProfiler).getBoolean(showProfiler);
         showGraph = c.get("hud", "showGraph", showGraph).getBoolean(showGraph);
         showGraphEvents = c.get("hud", "showGraphEvents", showGraphEvents).getBoolean(showGraphEvents);
+        showFpsGraph = c.get("hud", "showFpsGraph", showFpsGraph).getBoolean(showFpsGraph);
+        showMemoryGraph = c.get("hud", "showMemoryGraph", showMemoryGraph).getBoolean(showMemoryGraph);
         textShadow = c.get("hud", "textShadow", textShadow).getBoolean(textShadow);
         hudScale = c.get("hud", "hudScale", hudScale).getDouble(hudScale);
         panelOpacity = c.get("hud", "panelOpacity", panelOpacity).getDouble(panelOpacity);
@@ -165,6 +168,8 @@ public final class FrameConfig {
         properties.get("hud", "showProfiler", true).set(showProfiler);
         properties.get("hud", "showGraph", true).set(showGraph);
         properties.get("hud", "showGraphEvents", true).set(showGraphEvents);
+        properties.get("hud", "showFpsGraph", false).set(showFpsGraph);
+        properties.get("hud", "showMemoryGraph", false).set(showMemoryGraph);
         properties.get("hud", "textShadow", false).set(textShadow);
         properties.get("hud", "hudScale", 0.8).set(hudScale);
         properties.get("hud", "panelOpacity", 0.65).set(panelOpacity);
@@ -190,6 +195,8 @@ public final class FrameConfig {
 
     public long revision() { return revision; }
 
+    public boolean hasGraphs() { return showGraph || showFpsGraph || showMemoryGraph; }
+
     public void applyPreset(String preset) {
         if (preset == null) throw new IllegalArgumentException("Preset must be minimal, graph or full");
         String name = preset.toLowerCase(Locale.ROOT);
@@ -202,6 +209,7 @@ public final class FrameConfig {
         showHardware = false;
         showGraph = !name.equals("minimal");
         showGraphEvents = full;
+        showFpsGraph = showMemoryGraph = full;
         detailed = showProfiler;
         changed();
     }
@@ -215,6 +223,7 @@ public final class FrameConfig {
         graphHeight = 45;
         showTitles = showFps = showFrameTime = showMemory = showDirectMemory = showProfiler = showGraph = showGraphEvents = true;
         showStatistics = showAllocation = showGc = showHardware = showEnvironment = textShadow = false;
+        showFpsGraph = showMemoryGraph = false;
         hudScale = 0.8;
         panelOpacity = 0.65;
         graphMaxMs = 100;

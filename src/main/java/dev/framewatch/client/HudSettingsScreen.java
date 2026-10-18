@@ -138,10 +138,14 @@ public final class HudSettingsScreen extends GuiScreen {
                 toggle(list, "showHardware", () -> c.showHardware, v -> c.showHardware = v);
                 toggle(list, "showEnvironment", () -> c.showEnvironment, v -> c.showEnvironment = v);
                 toggle(list, "showProfiler", () -> c.showProfiler, v -> { c.showProfiler = v; c.detailed = v; });
+                toggle(list, "showFpsGraph", () -> c.showFpsGraph, v -> c.showFpsGraph = v);
+                toggle(list, "showMemoryGraph", () -> c.showMemoryGraph, v -> c.showMemoryGraph = v);
                 toggle(list, "showGraph", () -> c.showGraph, v -> c.showGraph = v);
                 toggle(list, "showGraphEvents", () -> c.showGraphEvents, v -> c.showGraphEvents = v);
                 break;
             case 2:
+                toggle(list, "showFpsGraph", () -> c.showFpsGraph, v -> c.showFpsGraph = v);
+                toggle(list, "showMemoryGraph", () -> c.showMemoryGraph, v -> c.showMemoryGraph = v);
                 toggle(list, "showGraph", () -> c.showGraph, v -> c.showGraph = v);
                 toggle(list, "showGraphEvents", () -> c.showGraphEvents, v -> c.showGraphEvents = v);
                 slider(list, "graphWidth", 100, 400, 1, () -> c.graphWidth, v -> c.graphWidth = (int) v, "px", 0, false);

@@ -26,21 +26,22 @@ public final class HudLayout {
     final int titleRow, fpsRow, frameRow, statisticsRow, memoryRow, directMemoryRow;
     final int allocationRow, gcRow, hardwareRow, environmentRow, summaryRows;
     final int graphTop, graphHeight, graphFooter, graphEventsRow;
+    final int fpsGraphTop, memoryGraphTop;
     final int profilerTitleRow, profilerScopesRow, profilerTop;
 
     private HudLayout(FrameConfig cfg, int screenWidth, int screenHeight) {
         contentWidth = Math.max(1, cfg.graphWidth) + PADDING * 2;
         boolean summary = cfg.showFps || cfg.showFrameTime || cfg.showStatistics || cfg.showMemory
                 || cfg.showDirectMemory || cfg.showAllocation || cfg.showGc || cfg.showHardware || cfg.showEnvironment;
-        boolean leftContent = summary || cfg.showGraph;
+        boolean leftContent = summary || cfg.hasGraphs();
         int rows = 0;
         titleRow = cfg.showTitles && leftContent ? rows++ : -1;
-        fpsRow = cfg.showFps ? rows++ : -1;
-        frameRow = cfg.showFrameTime ? rows++ : -1;
+        // When a graph is visible its header owns the metric, not the summary.
+        fpsRow = cfg.showFps && !cfg.showFpsGraph ? rows++ : -1;
+        frameRow = cfg.showFrameTime && !cfg.showGraph ? rows++ : -1;
         statisticsRow = cfg.showStatistics ? rows : -1;
         if (cfg.showStatistics) rows += STATISTICS_ROWS;
-        memoryRow = cfg.showMemory ? rows : -1;
-        if (cfg.showMemory) rows += MEMORY_ROWS;
+        memoryRow = cfg.showMemory && !cfg.showMemoryGraph ? rows++ : -1;
         directMemoryRow = cfg.showDirectMemory ? rows++ : -1;
         allocationRow = cfg.showAllocation ? rows++ : -1;
         gcRow = cfg.showGc ? rows : -1;
@@ -55,9 +56,14 @@ public final class HudLayout {
         graphTop = cfg.showGraph ? PADDING + (rows + 1) * ROW_HEIGHT : -1;
         graphFooter = cfg.showGraph ? graphTop + graphHeight + 2 : -1;
         graphEventsRow = cfg.showGraph && cfg.showGraphEvents ? graphFooter + ROW_HEIGHT : -1;
-        leftLogicalHeight = !leftContent ? 0 : cfg.showGraph
-                ? graphFooter + ROW_HEIGHT + (cfg.showGraphEvents ? ROW_HEIGHT : 0) + PADDING
-                : PADDING * 2 + rows * ROW_HEIGHT;
+        int bottom = cfg.showGraph
+                ? graphFooter + ROW_HEIGHT + (cfg.showGraphEvents ? ROW_HEIGHT : 0)
+                : PADDING + rows * ROW_HEIGHT;
+        fpsGraphTop = cfg.showFpsGraph ? bottom + ROW_HEIGHT : -1;
+        if (cfg.showFpsGraph) bottom = fpsGraphTop + graphHeight + 2 + ROW_HEIGHT;
+        memoryGraphTop = cfg.showMemoryGraph ? bottom + ROW_HEIGHT : -1;
+        if (cfg.showMemoryGraph) bottom = memoryGraphTop + graphHeight + 2 + ROW_HEIGHT;
+        leftLogicalHeight = leftContent ? bottom + PADDING : 0;
 
         profilerTitleRow = cfg.showProfiler && cfg.showTitles ? 0 : -1;
         profilerScopesRow = cfg.showTitles ? 1 : 0;

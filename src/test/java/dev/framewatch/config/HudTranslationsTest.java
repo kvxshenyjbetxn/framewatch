@@ -29,6 +29,8 @@ public class HudTranslationsTest {
         assertEquals("FRAME: ", HudTranslations.textFor("en_US", "uk_UA", "framewatch.hud.frame"));
         assertEquals("КАДР: ", HudTranslations.textFor("uk_UA", "en_US", "framewatch.hud.frame"));
         assertEquals("Готово", HudTranslations.textFor("uk_UA", "fr_FR", "framewatch.done"));
+        assertEquals("RAM: ", HudTranslations.textFor("en_US", null, "framewatch.hud.heap"));
+        assertEquals("RAM: ", HudTranslations.textFor("uk_UA", null, "framewatch.hud.heap"));
     }
 
     @Test public void autoFollowsOnlyUkrainianAndUnknownPreferenceFallsBackToEnglish() {
