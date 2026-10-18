@@ -1,0 +1,7 @@
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    // RFG omits these from headless tests; GUI tests use Java classes only,
+    // without creating a window or loading native libraries. Not shipped in the mod.
+    testRuntimeOnly 'org.lwjgl.lwjgl:lwjgl:2.9.4-nightly-20150209'
+    testRuntimeOnly 'org.lwjgl.lwjgl:lwjgl_util:2.9.4-nightly-20150209'
+}

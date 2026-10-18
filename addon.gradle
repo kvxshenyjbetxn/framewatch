@@ -1,0 +1,16 @@
+version = '0.3.1'
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+
+// Optional read-only validation against a user's actual multi-release Angelica.
+tasks.register('verifyAngelica', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    mainClass = 'dev.framewatch.core.AngelicaPreflight'
+    executable = new File(System.getProperty('java.home'), 'bin/java.exe').absolutePath
+    doFirst {
+        if (!project.hasProperty('angelicaJar') || !project.hasProperty('runtimePatches')) {
+            throw new GradleException('Pass -PangelicaJar=<Angelica JAR> -PruntimePatches=<lwjgl3ify forgePatches JAR>')
+        }
+        classpath = files(project.property('runtimePatches')) + sourceSets.test.runtimeClasspath
+        args = [project.property('angelicaJar')]
+    }
+}

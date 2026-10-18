@@ -1,0 +1,10 @@
+[
+  {
+    "modid": "framewatch",
+    "name": "FrameWatch",
+    "description": "Configurable Minecraft-style performance HUD with scale, panel toggles, time-based frametime graph, client/JVM telemetry and CSV export. No server component or external telemetry.",
+    "version": "0.3.1",
+    "mcversion": "1.7.10",
+    "authorList": ["FrameWatch contributors"]
+  }
+]
